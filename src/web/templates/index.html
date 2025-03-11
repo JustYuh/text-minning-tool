@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Mining Tool</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            background-color: #f4f4f4;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        h1 {
+            margin: 0;
+            color: #444;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .form-section {
+            flex: 1;
+            min-width: 300px;
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .info-section {
+            flex: 1;
+            min-width: 300px;
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+        }
+        input[type="file"] {
+            margin-bottom: 15px;
+        }
+        .options {
+            margin-bottom: 15px;
+        }
+        .option {
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .error {
+            color: red;
+            margin-bottom: 15px;
+        }
+        footer {
+            margin-top: 20px;
+            text-align: center;
+            color: #777;
+            font-size: 14px;
+        }
+        #loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #4CAF50;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        #file-name {
+            display: none;
+            margin-top: 5px;
+            font-style: italic;
+        }
+        
+        #error-message {
+            display: none;
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        
+        #api-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+        
+        #api-results {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .download-buttons {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .download-buttons button {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Text Mining Tool</h1>
+        <p>Extract insights from your text data</p>
+    </header>
+
+    <div class="container">
+        <div id="error-message"></div>
+        
+        <div class="form-section">
+            <h2>Process Text</h2>
+            {% if error %}
+            <div class="error">{{ error }}</div>
+            {% endif %}
+            
+            <form id="process-form" action="/process" method="post" enctype="multipart/form-data">
+                <div>
+                    <label for="text">Enter Text:</label>
+                    <textarea id="text" name="text" placeholder="Enter your text here..."></textarea>
+                </div>
+                
+                <div>
+                    <label for="file">Or Upload a File:</label>
+                    <input type="file" id="file" name="file">
+                    <div id="file-name"></div>
+                </div>
+                
+                <div class="options">
+                    <h3>Analysis Options:</h3>
+                    
+                    <div class="option">
+                        <input type="checkbox" id="sentiment" name="sentiment" value="true">
+                        <label for="sentiment">Sentiment Analysis</label>
+                    </div>
+                    
+                    <div class="option">
+                        <input type="checkbox" id="ner" name="ner" value="true">
+                        <label for="ner">Named Entity Recognition</label>
+                    </div>
+                    
+                    <div class="option">
+                        <input type="checkbox" id="keywords" name="keywords" value="true">
+                        <label for="keywords">Keyword Extraction</label>
+                    </div>
+                    
+                    <div class="option">
+                        <input type="checkbox" id="topics" name="topics" value="true">
+                        <label for="topics">Topic Modeling</label>
+                    </div>
+                    
+                    <div class="option">
+                        <input type="checkbox" id="summary" name="summary" value="true">
+                        <label for="summary">Text Summarization</label>
+                    </div>
+                    
+                    <div class="option">
+                        <input type="checkbox" id="visualize" name="visualize" value="true">
+                        <label for="visualize">Generate Visualizations</label>
+                    </div>
+                </div>
+                
+                <div id="loading">
+                    <div class="spinner"></div>
+                    <p>Processing your text...</p>
+                </div>
+                
+                <button type="submit">Process Text</button>
+            </form>
+            
+            <div id="api-section">
+                <h2>API Access</h2>
+                <p>Try out the API directly:</p>
+                
+                <form id="api-form">
+                    <div>
+                        <label for="api-text">Enter Text:</label>
+                        <textarea id="api-text" name="api-text" placeholder="Enter your text here..."></textarea>
+                    </div>
+                    
+                    <div class="options">
+                        <h3>Analysis Options:</h3>
+                        
+                        <div class="option">
+                            <input type="checkbox" id="api-sentiment" name="api-analyses" value="sentiment">
+                            <label for="api-sentiment">Sentiment Analysis</label>
+                        </div>
+                        
+                        <div class="option">
+                            <input type="checkbox" id="api-ner" name="api-analyses" value="entities">
+                            <label for="api-ner">Named Entity Recognition</label>
+                        </div>
+                        
+                        <div class="option">
+                            <input type="checkbox" id="api-keywords" name="api-analyses" value="keywords">
+                            <label for="api-keywords">Keyword Extraction</label>
+                        </div>
+                    </div>
+                    
+                    <button type="submit">Process with API</button>
+                </form>
+                
+                <div id="api-results"></div>
+            </div>
+        </div>
+        
+        <div class="info-section">
+            <h2>About Text Mining Tool</h2>
+            <p>The Text Mining Tool is a powerful application for extracting insights from text data. It provides various text analysis capabilities, including:</p>
+            <ul>
+                <li>Text preprocessing (tokenization, lemmatization, etc.)</li>
+                <li>Sentiment analysis</li>
+                <li>Named entity recognition</li>
+                <li>Keyword extraction</li>
+                <li>Topic modeling</li>
+                <li>Text summarization</li>
+                <li>Visualization</li>
+            </ul>
+            
+            <h3>Getting Started</h3>
+            <p>To get started, simply enter your text in the text area or upload a file, select the analyses you want to perform, and click "Process Text".</p>
+            
+            <h3>API Documentation</h3>
+            <p>The Text Mining Tool also provides API endpoints for programmatic access:</p>
+            
+            <div class="api-docs">
+                <h4>POST /api/process</h4>
+                <p>Process text and return basic preprocessing results.</p>
+                <pre>{
+  "text": "Your text here"
+}</pre>
+                
+                <h4>POST /api/analyze</h4>
+                <p>Process text and perform additional analyses.</p>
+                <pre>{
+  "text": "Your text here",
+  "analyses": ["sentiment", "entities", "keywords"]
+}</pre>
+                
+                <h4>POST /api/visualize</h4>
+                <p>Generate visualizations for processed text.</p>
+                <pre>{
+  "text": "Your text here",
+  "visualization_type": "wordcloud"
+}</pre>
+            </div>
+            
+            <p>For more details, see the <a href="/docs/api">full API documentation</a>.</p>
+        </div>
+    </div>
+    
+    <footer>
+        <p>&copy; 2025 JustYuh. Released under the MIT License.</p>
+    </footer>
+    
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html> 

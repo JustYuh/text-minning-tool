@@ -14,16 +14,23 @@ import io
 import logging
 from typing import List, Dict, Any, Union, Optional, Tuple
 from collections import Counter
+import os
+import random
 
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import networkx as nx
-from wordcloud import WordCloud
+# Import visualization dependencies with availability checks
+from . import MATPLOTLIB_AVAILABLE, WORDCLOUD_AVAILABLE, PLOTLY_AVAILABLE
+
+if MATPLOTLIB_AVAILABLE:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+if WORDCLOUD_AVAILABLE:
+    from wordcloud import WordCloud
+
+if PLOTLY_AVAILABLE:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -625,4 +632,200 @@ def create_dashboard(results: Dict[str, Any]) -> List[go.Figure]:
     if 'summaries' in results and 'original_text' in results:
         figures.append(create_summary_chart(results['summaries'], results['original_text']))
     
-    return figures 
+    return figures
+
+def generate_wordcloud(
+    tokens: List[str],
+    output_path: str,
+    width: int = 800,
+    height: int = 400,
+    background_color: str = 'white',
+    max_words: int = 200
+) -> bool:
+    """Generate a word cloud from tokens."""
+    if not WORDCLOUD_AVAILABLE:
+        logger.warning("WordCloud is not available. Word cloud generation will be skipped.")
+        return False
+    
+    if not tokens:
+        logger.warning("No tokens provided for word cloud generation.")
+        return False
+    
+    try:
+        # Create a frequency dictionary
+        text = ' '.join(tokens)
+        
+        # Generate the word cloud
+        wordcloud = WordCloud(
+            width=width,
+            height=height,
+            background_color=background_color,
+            max_words=max_words
+        ).generate(text)
+        
+        # Save the word cloud
+        wordcloud.to_file(output_path)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error generating word cloud: {str(e)}")
+        return False
+
+def generate_sentiment_chart(
+    sentiment_data: Dict[str, Any],
+    output_path: str,
+    width: int = 8,
+    height: int = 6,
+    dpi: int = 100
+) -> bool:
+    """Generate a sentiment chart."""
+    if not MATPLOTLIB_AVAILABLE:
+        logger.warning("Matplotlib is not available. Sentiment chart generation will be skipped.")
+        return False
+    
+    if not sentiment_data:
+        logger.warning("No sentiment data provided for chart generation.")
+        return False
+    
+    try:
+        # Create a figure
+        plt.figure(figsize=(width, height), dpi=dpi)
+        
+        # Extract sentiment scores
+        scores = {
+            'Positive': sentiment_data.get('positive', 0),
+            'Negative': sentiment_data.get('negative', 0),
+            'Neutral': sentiment_data.get('neutral', 0)
+        }
+        
+        # Create a bar chart
+        plt.bar(
+            scores.keys(),
+            scores.values(),
+            color=[COLOR_SCHEMES['sentiment'][k.lower()] for k in scores.keys()]
+        )
+        
+        # Add labels and title
+        plt.xlabel('Sentiment')
+        plt.ylabel('Score')
+        plt.title('Sentiment Analysis')
+        
+        # Add grid
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        
+        # Save the chart
+        plt.savefig(output_path, bbox_inches='tight')
+        plt.close()
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error generating sentiment chart: {str(e)}")
+        return False
+
+def generate_entity_chart(
+    entities: List[Dict[str, Any]],
+    output_path: str,
+    width: int = 10,
+    height: int = 6,
+    dpi: int = 100,
+    max_entities: int = 10
+) -> bool:
+    """Generate an entity chart."""
+    if not MATPLOTLIB_AVAILABLE:
+        logger.warning("Matplotlib is not available. Entity chart generation will be skipped.")
+        return False
+    
+    if not entities:
+        logger.warning("No entities provided for chart generation.")
+        return False
+    
+    try:
+        # Create a figure
+        plt.figure(figsize=(width, height), dpi=dpi)
+        
+        # Count entity types
+        entity_counts = Counter(entity['type'] for entity in entities)
+        
+        # Get the top N entity types
+        top_entities = entity_counts.most_common(max_entities)
+        types, counts = zip(*top_entities)
+        
+        # Create colors list
+        colors = [COLOR_SCHEMES['entity_types'].get(t, '#95a5a6') for t in types]
+        
+        # Create a bar chart
+        plt.bar(types, counts, color=colors)
+        
+        # Add labels and title
+        plt.xlabel('Entity Type')
+        plt.ylabel('Count')
+        plt.title('Named Entity Recognition')
+        
+        # Rotate x-axis labels for better readability
+        plt.xticks(rotation=45, ha='right')
+        
+        # Add grid
+        plt.grid(axis='y', linestyle='--', alpha=0.7)
+        
+        # Adjust layout
+        plt.tight_layout()
+        
+        # Save the chart
+        plt.savefig(output_path, bbox_inches='tight')
+        plt.close()
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error generating entity chart: {str(e)}")
+        return False
+
+def generate_keyword_chart(
+    keywords: List[Dict[str, Any]],
+    output_path: str,
+    width: int = 10,
+    height: int = 6,
+    dpi: int = 100,
+    max_keywords: int = 10
+) -> bool:
+    """Generate a keyword chart."""
+    if not MATPLOTLIB_AVAILABLE:
+        logger.warning("Matplotlib is not available. Keyword chart generation will be skipped.")
+        return False
+    
+    if not keywords:
+        logger.warning("No keywords provided for chart generation.")
+        return False
+    
+    try:
+        # Create a figure
+        plt.figure(figsize=(width, height), dpi=dpi)
+        
+        # Sort keywords by score and get top N
+        sorted_keywords = sorted(keywords, key=lambda x: x.get('score', 0), reverse=True)[:max_keywords]
+        
+        # Extract labels and values
+        labels = [kw.get('text', '') for kw in sorted_keywords]
+        scores = [kw.get('score', 0) for kw in sorted_keywords]
+        
+        # Create a horizontal bar chart
+        plt.barh(labels, scores, color='#3498db')
+        
+        # Add labels and title
+        plt.xlabel('Score')
+        plt.ylabel('Keyword')
+        plt.title('Keyword Extraction')
+        
+        # Add grid
+        plt.grid(axis='x', linestyle='--', alpha=0.7)
+        
+        # Adjust layout
+        plt.tight_layout()
+        
+        # Save the chart
+        plt.savefig(output_path, bbox_inches='tight')
+        plt.close()
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error generating keyword chart: {str(e)}")
+        return False 

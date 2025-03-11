@@ -1,8 +1,6 @@
 """
-Advanced Text Mining Tool
-------------------------
-A sophisticated text mining and natural language processing (NLP) application
-designed to extract valuable insights from large text datasets.
+Text Mining Tool
+A powerful and flexible tool for extracting insights from text data.
 """
 
 __version__ = '0.1.0'

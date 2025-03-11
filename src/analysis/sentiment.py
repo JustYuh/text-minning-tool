@@ -2,226 +2,183 @@
 # -*- coding: utf-8 -*-
 
 """
-Sentiment Analysis Module
-------------------------
-This module provides functionality for analyzing sentiment in text data.
-It uses transformer-based models to classify text into positive, negative,
-or neutral sentiment categories.
+Sentiment Analyzer Module
+This module provides the SentimentAnalyzer class for analyzing sentiment in text data.
 """
 
-import logging
-from typing import List, Dict, Any, Union, Optional
+import re
+from typing import Dict, List, Any, Optional, Union
+from collections import Counter
 
-import numpy as np
-from tqdm import tqdm
-from transformers import pipeline, AutoModelForSequenceClassification, AutoTokenizer
+try:
+    import nltk
+    from nltk.sentiment import SentimentIntensityAnalyzer
+    
+    # Download required NLTK data if not already downloaded
+    try:
+        nltk.data.find('sentiment/vader_lexicon.zip')
+    except LookupError:
+        nltk.download('vader_lexicon')
+        
+    NLTK_SENTIMENT_AVAILABLE = True
+except ImportError:
+    NLTK_SENTIMENT_AVAILABLE = False
+    print("NLTK SentimentIntensityAnalyzer is not available. Basic sentiment analysis will be used.")
 
-# Configure logging
-logger = logging.getLogger(__name__)
+# Simple lexicon for basic sentiment analysis when NLTK is not available
+POSITIVE_WORDS = {
+    'good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'terrific',
+    'outstanding', 'superb', 'brilliant', 'awesome', 'fabulous', 'incredible',
+    'love', 'happy', 'joy', 'pleased', 'delight', 'positive', 'nice', 'best',
+    'better', 'beautiful', 'perfect', 'recommend', 'recommended', 'satisfied',
+    'impressive', 'enjoy', 'enjoyed', 'like', 'liked', 'favorite', 'favourite'
+}
+
+NEGATIVE_WORDS = {
+    'bad', 'terrible', 'awful', 'horrible', 'poor', 'disappointing', 'disappointed',
+    'worst', 'waste', 'hate', 'dislike', 'sad', 'unhappy', 'angry', 'negative',
+    'problem', 'issue', 'difficult', 'hard', 'trouble', 'fail', 'failed', 'failure',
+    'boring', 'annoying', 'frustrating', 'useless', 'expensive', 'overpriced',
+    'avoid', 'avoid', 'unfortunately', 'not', 'never', 'no', 'not', "don't", "doesn't"
+}
+
 
 class SentimentAnalyzer:
     """
     A class for analyzing sentiment in text data.
     
-    This class uses transformer-based models to classify text into
-    positive, negative, or neutral sentiment categories.
+    This class provides methods for determining the sentiment (positive, negative, neutral)
+    of text data using either NLTK's SentimentIntensityAnalyzer or a simple lexicon-based
+    approach when NLTK is not available.
+    
+    Attributes:
+        use_nltk (bool): Whether to use NLTK's SentimentIntensityAnalyzer.
+        sia: The NLTK SentimentIntensityAnalyzer instance (if available).
     """
     
-    def __init__(self, model_size: str = 'default', device: int = -1):
+    def __init__(self, use_nltk: bool = True):
         """
-        Initialize the SentimentAnalyzer with the specified parameters.
+        Initialize the SentimentAnalyzer.
         
         Args:
-            model_size: The size of the model to use ('small', 'default', 'large').
-            device: The device to use for inference (-1 for CPU, 0+ for GPU).
+            use_nltk: Whether to use NLTK's SentimentIntensityAnalyzer (if available).
         """
-        self.model_size = model_size
-        self.device = device
+        self.use_nltk = use_nltk and NLTK_SENTIMENT_AVAILABLE
         
-        # Map model size to model name
-        model_map = {
-            'small': 'distilbert-base-uncased-finetuned-sst-2-english',
-            'default': 'cardiffnlp/twitter-roberta-base-sentiment-latest',
-            'large': 'nlptown/bert-base-multilingual-uncased-sentiment'
-        }
-        
-        model_name = model_map.get(model_size, model_map['default'])
-        
-        try:
-            # Initialize the sentiment analysis pipeline
-            self.sentiment_pipeline = pipeline(
-                "sentiment-analysis",
-                model=model_name,
-                tokenizer=model_name,
-                device=device
-            )
-            logger.info(f"Initialized sentiment analysis pipeline with model: {model_name}")
-        except Exception as e:
-            logger.error(f"Error initializing sentiment analysis pipeline: {str(e)}")
-            # Fallback to a simpler model if the requested one fails
-            try:
-                fallback_model = "distilbert-base-uncased-finetuned-sst-2-english"
-                self.sentiment_pipeline = pipeline(
-                    "sentiment-analysis",
-                    model=fallback_model,
-                    tokenizer=fallback_model,
-                    device=device
-                )
-                logger.info(f"Initialized fallback sentiment analysis pipeline with model: {fallback_model}")
-            except Exception as e2:
-                logger.error(f"Error initializing fallback sentiment analysis pipeline: {str(e2)}")
-                self.sentiment_pipeline = None
+        if self.use_nltk:
+            self.sia = SentimentIntensityAnalyzer()
     
     def analyze(self, text: str) -> Dict[str, Any]:
         """
-        Analyze the sentiment of the given text.
+        Analyze the sentiment of the text.
         
         Args:
-            text: The input text to analyze.
+            text: The text to analyze.
             
         Returns:
-            A dictionary containing the sentiment label and score.
+            A dictionary containing the sentiment analysis results.
         """
-        if not text or not self.sentiment_pipeline:
-            return {"label": "neutral", "score": 0.5}
-        
-        try:
-            # Truncate text if it's too long to avoid memory issues
-            max_length = 512
-            if len(text) > max_length:
-                text = text[:max_length]
-            
-            # Run the sentiment analysis pipeline
-            result = self.sentiment_pipeline(text)[0]
-            
-            # Normalize the label to positive, negative, or neutral
-            label = result['label'].lower()
-            if 'positive' in label or 'pos' in label or '5' in label or '4' in label:
-                normalized_label = 'positive'
-            elif 'negative' in label or 'neg' in label or '1' in label or '2' in label:
-                normalized_label = 'negative'
-            else:
-                normalized_label = 'neutral'
-            
+        if not text:
             return {
-                "label": normalized_label,
-                "score": result['score'],
-                "original_label": result['label']
+                'score': 0.0,
+                'label': 'neutral',
+                'positive': 0.0,
+                'negative': 0.0,
+                'neutral': 1.0
             }
         
-        except Exception as e:
-            logger.error(f"Error analyzing sentiment: {str(e)}")
-            return {"label": "neutral", "score": 0.5, "error": str(e)}
+        if self.use_nltk:
+            return self._analyze_with_nltk(text)
+        else:
+            return self._analyze_with_lexicon(text)
     
-    def analyze_batch(self, texts: List[Union[str, Dict[str, Any]]], batch_size: int = 32) -> List[Dict[str, Any]]:
+    def _analyze_with_nltk(self, text: str) -> Dict[str, Any]:
+        """
+        Analyze the sentiment of the text using NLTK's SentimentIntensityAnalyzer.
+        
+        Args:
+            text: The text to analyze.
+            
+        Returns:
+            A dictionary containing the sentiment analysis results.
+        """
+        scores = self.sia.polarity_scores(text)
+        
+        # Determine the sentiment label based on the compound score
+        if scores['compound'] >= 0.05:
+            label = 'positive'
+        elif scores['compound'] <= -0.05:
+            label = 'negative'
+        else:
+            label = 'neutral'
+        
+        return {
+            'score': scores['compound'],
+            'label': label,
+            'positive': scores['pos'],
+            'negative': scores['neg'],
+            'neutral': scores['neu']
+        }
+    
+    def _analyze_with_lexicon(self, text: str) -> Dict[str, Any]:
+        """
+        Analyze the sentiment of the text using a simple lexicon-based approach.
+        
+        Args:
+            text: The text to analyze.
+            
+        Returns:
+            A dictionary containing the sentiment analysis results.
+        """
+        # Preprocess the text
+        text = text.lower()
+        # Remove punctuation
+        text = re.sub(r'[^\w\s]', '', text)
+        # Tokenize
+        tokens = text.split()
+        
+        # Count positive and negative words
+        positive_count = sum(1 for token in tokens if token in POSITIVE_WORDS)
+        negative_count = sum(1 for token in tokens if token in NEGATIVE_WORDS)
+        total_count = len(tokens)
+        
+        # Calculate scores
+        if total_count > 0:
+            positive_score = positive_count / total_count
+            negative_score = negative_count / total_count
+            neutral_score = 1.0 - (positive_score + negative_score)
+        else:
+            positive_score = 0.0
+            negative_score = 0.0
+            neutral_score = 1.0
+        
+        # Calculate compound score (similar to NLTK's compound score)
+        compound_score = positive_score - negative_score
+        
+        # Determine the sentiment label
+        if compound_score >= 0.05:
+            label = 'positive'
+        elif compound_score <= -0.05:
+            label = 'negative'
+        else:
+            label = 'neutral'
+        
+        return {
+            'score': compound_score,
+            'label': label,
+            'positive': positive_score,
+            'negative': negative_score,
+            'neutral': neutral_score
+        }
+    
+    def analyze_batch(self, texts: List[str]) -> List[Dict[str, Any]]:
         """
         Analyze the sentiment of a batch of texts.
         
         Args:
-            texts: A list of texts or processed text dictionaries to analyze.
-            batch_size: The batch size for processing.
+            texts: The texts to analyze.
             
         Returns:
-            A list of dictionaries containing the sentiment labels and scores.
+            A list of dictionaries containing the sentiment analysis results.
         """
-        if not texts or not self.sentiment_pipeline:
-            return [{"label": "neutral", "score": 0.5} for _ in range(len(texts))]
-        
-        results = []
-        
-        # Extract text from dictionaries if needed
-        processed_texts = []
-        for item in texts:
-            if isinstance(item, dict):
-                # Use the processed text if available, otherwise use the original
-                text = item.get('processed', item.get('original', ''))
-            else:
-                text = item
-            processed_texts.append(text)
-        
-        # Process in batches to avoid memory issues
-        for i in range(0, len(processed_texts), batch_size):
-            batch = processed_texts[i:i+batch_size]
-            
-            try:
-                # Run the sentiment analysis pipeline on the batch
-                batch_results = self.sentiment_pipeline(batch)
-                
-                # Normalize the labels
-                for result in batch_results:
-                    label = result['label'].lower()
-                    if 'positive' in label or 'pos' in label or '5' in label or '4' in label:
-                        normalized_label = 'positive'
-                    elif 'negative' in label or 'neg' in label or '1' in label or '2' in label:
-                        normalized_label = 'negative'
-                    else:
-                        normalized_label = 'neutral'
-                    
-                    results.append({
-                        "label": normalized_label,
-                        "score": result['score'],
-                        "original_label": result['label']
-                    })
-            
-            except Exception as e:
-                logger.error(f"Error analyzing sentiment batch: {str(e)}")
-                # Add neutral sentiment for all texts in the failed batch
-                results.extend([{"label": "neutral", "score": 0.5, "error": str(e)} for _ in range(len(batch))])
-        
-        return results
-    
-    def analyze_document(self, document: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Analyze the sentiment of a document at both document and sentence levels.
-        
-        Args:
-            document: A processed document dictionary.
-            
-        Returns:
-            A dictionary containing document-level and sentence-level sentiment analysis.
-        """
-        if not document or not self.sentiment_pipeline:
-            return {
-                "document_sentiment": {"label": "neutral", "score": 0.5},
-                "sentence_sentiments": []
-            }
-        
-        try:
-            # Get the document text
-            text = document.get('processed', document.get('original', ''))
-            
-            # Analyze document-level sentiment
-            document_sentiment = self.analyze(text)
-            
-            # Analyze sentence-level sentiment
-            sentences = document.get('sentences', [])
-            sentence_sentiments = self.analyze_batch(sentences) if sentences else []
-            
-            # Calculate aggregate sentiment statistics
-            sentiment_scores = {
-                'positive': 0,
-                'neutral': 0,
-                'negative': 0
-            }
-            
-            for sent in sentence_sentiments:
-                sentiment_scores[sent['label']] += 1
-            
-            total_sentences = len(sentence_sentiments) if sentence_sentiments else 1
-            sentiment_distribution = {
-                label: count / total_sentences
-                for label, count in sentiment_scores.items()
-            }
-            
-            return {
-                "document_sentiment": document_sentiment,
-                "sentence_sentiments": sentence_sentiments,
-                "sentiment_distribution": sentiment_distribution
-            }
-        
-        except Exception as e:
-            logger.error(f"Error analyzing document sentiment: {str(e)}")
-            return {
-                "document_sentiment": {"label": "neutral", "score": 0.5, "error": str(e)},
-                "sentence_sentiments": []
-            } 
+        return [self.analyze(text) for text in texts] 

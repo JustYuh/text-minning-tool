@@ -3,54 +3,84 @@
 
 """
 Text Processor Module
---------------------
-This module provides functionality for preprocessing and normalizing text data.
-It includes methods for tokenization, stemming, lemmatization, stopword removal,
-and other text cleaning operations.
+This module provides the TextProcessor class for preprocessing and normalizing text data.
 """
 
 import re
 import string
-import unicodedata
-from concurrent.futures import ProcessPoolExecutor
-from typing import List, Dict, Any, Union, Optional
+from typing import Dict, List, Any, Optional, Union
 
-import nltk
-from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer, PorterStemmer
-from nltk.tokenize import word_tokenize, sent_tokenize
-import spacy
-from tqdm import tqdm
-
-# Ensure NLTK resources are available
 try:
-    nltk.data.find('tokenizers/punkt')
-    nltk.data.find('corpora/stopwords')
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    nltk.download('punkt')
-    nltk.download('stopwords')
-    nltk.download('wordnet')
+    import nltk
+    from nltk.tokenize import word_tokenize, sent_tokenize
+    from nltk.corpus import stopwords
+    from nltk.stem import WordNetLemmatizer, PorterStemmer
+    
+    # Download required NLTK data if not already downloaded
+    try:
+        nltk.data.find('tokenizers/punkt')
+    except LookupError:
+        nltk.download('punkt')
+        
+    try:
+        nltk.data.find('corpora/stopwords')
+    except LookupError:
+        nltk.download('stopwords')
+        
+    try:
+        nltk.data.find('corpora/wordnet')
+    except LookupError:
+        nltk.download('wordnet')
+        
+    NLTK_AVAILABLE = True
+except ImportError:
+    NLTK_AVAILABLE = False
+    print("NLTK is not installed. Basic functionality will be limited.")
+
+try:
+    import spacy
+    SPACY_AVAILABLE = True
+except ImportError:
+    SPACY_AVAILABLE = False
+    print("spaCy is not installed. Advanced NLP features will not be available.")
+
 
 class TextProcessor:
     """
     A class for preprocessing and normalizing text data.
     
-    This class provides methods for various text preprocessing tasks such as
-    tokenization, stemming, lemmatization, stopword removal, and more.
+    This class provides methods for preprocessing text, including tokenization,
+    stopword removal, lemmatization, stemming, and more.
+    
+    Attributes:
+        language (str): The language code (ISO 639-1) for the text.
+        remove_stopwords (bool): Whether to remove stopwords.
+        remove_punctuation (bool): Whether to remove punctuation.
+        remove_numbers (bool): Whether to remove numbers.
+        lemmatize (bool): Whether to lemmatize tokens.
+        stem (bool): Whether to stem tokens.
+        lowercase (bool): Whether to convert text to lowercase.
+        min_token_length (int): Minimum length of tokens to keep.
+        custom_stopwords (List[str]): Additional stopwords to remove.
+        use_spacy (bool): Whether to use spaCy for advanced NLP (if available).
+        nlp: The spaCy language model (if spaCy is available and use_spacy is True).
     """
     
-    def __init__(self, language: str = 'en', 
-                 remove_stopwords: bool = True,
-                 remove_punctuation: bool = True,
-                 remove_numbers: bool = False,
-                 lemmatize: bool = True,
-                 stem: bool = False,
-                 lowercase: bool = True,
-                 min_token_length: int = 2,
-                 custom_stopwords: Optional[List[str]] = None):
+    def __init__(
+        self,
+        language: str = 'en',
+        remove_stopwords: bool = True,
+        remove_punctuation: bool = True,
+        remove_numbers: bool = False,
+        lemmatize: bool = True,
+        stem: bool = False,
+        lowercase: bool = True,
+        min_token_length: int = 2,
+        custom_stopwords: Optional[List[str]] = None,
+        use_spacy: bool = True
+    ):
         """
-        Initialize the TextProcessor with the specified parameters.
+        Initialize the TextProcessor.
         
         Args:
             language: The language code (ISO 639-1) for the text.
@@ -60,8 +90,9 @@ class TextProcessor:
             lemmatize: Whether to lemmatize tokens.
             stem: Whether to stem tokens.
             lowercase: Whether to convert text to lowercase.
-            min_token_length: Minimum length for a token to be kept.
+            min_token_length: Minimum length of tokens to keep.
             custom_stopwords: Additional stopwords to remove.
+            use_spacy: Whether to use spaCy for advanced NLP (if available).
         """
         self.language = language
         self.remove_stopwords = remove_stopwords
@@ -71,91 +102,99 @@ class TextProcessor:
         self.stem = stem
         self.lowercase = lowercase
         self.min_token_length = min_token_length
+        self.custom_stopwords = custom_stopwords or []
+        self.use_spacy = use_spacy and SPACY_AVAILABLE
         
-        # Set up stopwords
-        self.stopwords = set()
-        if remove_stopwords:
+        # Initialize NLTK components
+        if NLTK_AVAILABLE:
+            self.stop_words = set(stopwords.words(self._get_nltk_language(language)))
+            if self.custom_stopwords:
+                self.stop_words.update(self.custom_stopwords)
+            
+            if self.lemmatize:
+                self.lemmatizer = WordNetLemmatizer()
+            
+            if self.stem:
+                self.stemmer = PorterStemmer()
+        
+        # Initialize spaCy model if available and requested
+        if self.use_spacy:
             try:
-                self.stopwords = set(stopwords.words(self._map_language_code()))
-            except:
-                # Fallback to English if the language is not available
-                self.stopwords = set(stopwords.words('english'))
-        
-        # Add custom stopwords if provided
-        if custom_stopwords:
-            self.stopwords.update(custom_stopwords)
-        
-        # Initialize lemmatizer and stemmer
-        self.lemmatizer = WordNetLemmatizer() if lemmatize else None
-        self.stemmer = PorterStemmer() if stem else None
-        
-        # Initialize spaCy model if available
-        self.nlp = None
-        try:
-            if language == 'en':
-                self.nlp = spacy.load('en_core_web_sm')
-            elif language == 'es':
-                self.nlp = spacy.load('es_core_news_sm')
-            elif language == 'fr':
-                self.nlp = spacy.load('fr_core_news_sm')
-            elif language == 'de':
-                self.nlp = spacy.load('de_core_news_sm')
-            # Add more languages as needed
-        except:
-            # Fallback to basic processing if spaCy model is not available
-            pass
+                self.nlp = spacy.load(self._get_spacy_model(language))
+            except OSError:
+                print(f"spaCy model for language '{language}' not found. Using NLTK instead.")
+                self.use_spacy = False
     
-    def _map_language_code(self) -> str:
-        """Map ISO 639-1 language code to NLTK language name."""
+    def _get_nltk_language(self, language: str) -> str:
+        """
+        Get the NLTK language name from the ISO 639-1 language code.
+        
+        Args:
+            language: The ISO 639-1 language code.
+            
+        Returns:
+            The NLTK language name.
+        """
         language_map = {
             'en': 'english',
-            'es': 'spanish',
             'fr': 'french',
             'de': 'german',
+            'es': 'spanish',
             'it': 'italian',
-            'nl': 'dutch',
             'pt': 'portuguese',
-            'ru': 'russian',
-            # Add more mappings as needed
+            'nl': 'dutch',
+            'ru': 'russian'
         }
-        return language_map.get(self.language, 'english')
+        
+        return language_map.get(language, 'english')
+    
+    def _get_spacy_model(self, language: str) -> str:
+        """
+        Get the spaCy model name from the ISO 639-1 language code.
+        
+        Args:
+            language: The ISO 639-1 language code.
+            
+        Returns:
+            The spaCy model name.
+        """
+        language_map = {
+            'en': 'en_core_web_sm',
+            'fr': 'fr_core_news_sm',
+            'de': 'de_core_news_sm',
+            'es': 'es_core_news_sm',
+            'it': 'it_core_news_sm',
+            'pt': 'pt_core_news_sm',
+            'nl': 'nl_core_news_sm',
+            'ru': 'ru_core_news_sm'
+        }
+        
+        return language_map.get(language, 'en_core_web_sm')
     
     def preprocess_text(self, text: str) -> str:
         """
         Preprocess the text by applying various cleaning operations.
         
         Args:
-            text: The input text to preprocess.
+            text: The text to preprocess.
             
         Returns:
             The preprocessed text.
         """
-        if not text or not isinstance(text, str):
+        if not text:
             return ""
         
-        # Normalize unicode characters
-        text = unicodedata.normalize('NFKD', text)
-        
-        # Convert to lowercase if specified
+        # Convert to lowercase if requested
         if self.lowercase:
             text = text.lower()
         
-        # Remove URLs
-        text = re.sub(r'https?://\S+|www\.\S+', '', text)
-        
-        # Remove email addresses
-        text = re.sub(r'\S+@\S+', '', text)
-        
-        # Remove punctuation if specified
+        # Remove punctuation if requested
         if self.remove_punctuation:
             text = text.translate(str.maketrans('', '', string.punctuation))
         
-        # Remove numbers if specified
+        # Remove numbers if requested
         if self.remove_numbers:
             text = re.sub(r'\d+', '', text)
-        
-        # Remove extra whitespace
-        text = re.sub(r'\s+', ' ', text).strip()
         
         return text
     
@@ -164,7 +203,7 @@ class TextProcessor:
         Tokenize the text into words.
         
         Args:
-            text: The input text to tokenize.
+            text: The text to tokenize.
             
         Returns:
             A list of tokens.
@@ -172,102 +211,112 @@ class TextProcessor:
         if not text:
             return []
         
-        # Use spaCy for tokenization if available
-        if self.nlp:
-            doc = self.nlp(text)
-            tokens = [token.text for token in doc]
-        else:
-            # Fallback to NLTK tokenization
-            tokens = word_tokenize(text)
+        # Preprocess the text
+        preprocessed_text = self.preprocess_text(text)
         
-        # Apply filters
-        filtered_tokens = []
+        if self.use_spacy:
+            # Use spaCy for tokenization
+            doc = self.nlp(preprocessed_text)
+            tokens = [token.text for token in doc]
+        elif NLTK_AVAILABLE:
+            # Use NLTK for tokenization
+            tokens = word_tokenize(preprocessed_text)
+        else:
+            # Fallback to simple whitespace tokenization
+            tokens = preprocessed_text.split()
+        
+        # Apply additional processing to tokens
+        processed_tokens = []
         for token in tokens:
             # Skip short tokens
             if len(token) < self.min_token_length:
                 continue
             
-            # Skip stopwords
-            if self.remove_stopwords and token in self.stopwords:
+            # Skip stopwords if requested
+            if self.remove_stopwords and NLTK_AVAILABLE and token in self.stop_words:
                 continue
             
-            # Apply lemmatization if specified
-            if self.lemmatize and self.lemmatizer:
+            # Apply lemmatization if requested
+            if self.lemmatize and NLTK_AVAILABLE:
                 token = self.lemmatizer.lemmatize(token)
             
-            # Apply stemming if specified
-            if self.stem and self.stemmer:
+            # Apply stemming if requested
+            if self.stem and NLTK_AVAILABLE:
                 token = self.stemmer.stem(token)
             
-            filtered_tokens.append(token)
+            processed_tokens.append(token)
         
-        return filtered_tokens
+        return processed_tokens
     
     def process(self, text: str) -> Dict[str, Any]:
         """
-        Process the text by applying preprocessing and tokenization.
+        Process the text and return various representations.
         
         Args:
-            text: The input text to process.
+            text: The text to process.
             
         Returns:
-            A dictionary containing the processed text and tokens.
+            A dictionary containing the original text, tokens, and sentences.
         """
         if not text:
-            return {"original": "", "processed": "", "tokens": []}
+            return {
+                'original_text': '',
+                'tokens': [],
+                'sentences': []
+            }
         
-        # Preprocess the text
-        processed_text = self.preprocess_text(text)
+        # Tokenize the text
+        tokens = self.tokenize(text)
         
-        # Tokenize the preprocessed text
-        tokens = self.tokenize(processed_text)
-        
-        # Extract sentences
-        sentences = sent_tokenize(text)
+        # Split the text into sentences
+        if self.use_spacy:
+            # Use spaCy for sentence segmentation
+            doc = self.nlp(text)
+            sentences = [sent.text for sent in doc.sents]
+        elif NLTK_AVAILABLE:
+            # Use NLTK for sentence segmentation
+            sentences = sent_tokenize(text)
+        else:
+            # Fallback to simple sentence segmentation
+            sentences = [s.strip() for s in re.split(r'[.!?]+', text) if s.strip()]
         
         return {
-            "original": text,
-            "processed": processed_text,
-            "tokens": tokens,
-            "sentences": sentences,
-            "token_count": len(tokens),
-            "sentence_count": len(sentences),
-            "language": self.language
+            'original_text': text,
+            'tokens': tokens,
+            'sentences': sentences
         }
     
-    def process_batch(self, texts: List[str], batch_size: int = 64, n_workers: int = 4) -> List[Dict[str, Any]]:
+    def process_batch(
+        self,
+        texts: List[str],
+        batch_size: int = 64,
+        n_workers: int = 4
+    ) -> List[Dict[str, Any]]:
         """
         Process a batch of texts in parallel.
         
         Args:
-            texts: A list of texts to process.
+            texts: The texts to process.
             batch_size: The batch size for processing.
             n_workers: The number of worker processes.
             
         Returns:
-            A list of dictionaries containing the processed texts and tokens.
+            A list of dictionaries containing the processed texts.
         """
-        if not texts:
-            return []
-        
-        results = []
-        
-        # Process in batches to avoid memory issues
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i+batch_size]
+        try:
+            from concurrent.futures import ProcessPoolExecutor
+            import numpy as np
             
-            # Process the batch in parallel
-            if n_workers > 1:
-                with ProcessPoolExecutor(max_workers=n_workers) as executor:
-                    batch_results = list(tqdm(
-                        executor.map(self.process, batch),
-                        total=len(batch),
-                        desc=f"Processing batch {i//batch_size + 1}/{(len(texts)-1)//batch_size + 1}"
-                    ))
-            else:
-                # Process sequentially if n_workers <= 1
-                batch_results = [self.process(text) for text in tqdm(batch, desc=f"Processing batch {i//batch_size + 1}/{(len(texts)-1)//batch_size + 1}")]
+            # Split texts into batches
+            batches = np.array_split(texts, max(1, len(texts) // batch_size))
             
-            results.extend(batch_results)
-        
-        return results 
+            results = []
+            with ProcessPoolExecutor(max_workers=n_workers) as executor:
+                for batch in batches:
+                    batch_results = list(executor.map(self.process, batch))
+                    results.extend(batch_results)
+            
+            return results
+        except ImportError:
+            # Fallback to sequential processing
+            return [self.process(text) for text in texts] 

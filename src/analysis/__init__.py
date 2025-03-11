@@ -1,13 +1,35 @@
 """
-Text Analysis Package
-------------------
-This package provides functionality for analyzing text data using various
-natural language processing techniques.
+Analysis Module
+This module provides classes and functions for analyzing text data.
 """
 
-from .sentiment import SentimentAnalyzer
-from .entity_recognition import NamedEntityRecognizer
-from .topic_modeling import TopicModeler
-from .text_classifier import TextClassifier
-from .summarizer import TextSummarizer
-from .keyword_extractor import KeywordExtractor 
+# Import analysis components as they become available
+try:
+    from .sentiment import SentimentAnalyzer
+except ImportError:
+    pass
+
+try:
+    from .entities import NamedEntityRecognizer
+except ImportError:
+    pass
+
+try:
+    from .keywords import KeywordExtractor
+except ImportError:
+    pass
+
+try:
+    from .topics import TopicModeler
+except ImportError:
+    pass
+
+try:
+    from .summarizer import TextSummarizer
+except ImportError:
+    pass
+
+try:
+    from .classifier import TextClassifier
+except ImportError:
+    pass 

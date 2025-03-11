@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Mining Results - Text Mining Tool</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+        .header {
+            padding-bottom: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid #e5e5e5;
+        }
+        .footer {
+            padding-top: 1rem;
+            margin-top: 2rem;
+            border-top: 1px solid #e5e5e5;
+            text-align: center;
+        }
+        .result-section {
+            margin-bottom: 2rem;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            overflow-x: auto;
+        }
+        .token-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Text Mining Results</h1>
+            <p class="lead">Results of your text mining analysis</p>
+            <a href="/" class="btn btn-primary">Back to Home</a>
+            <a href="/download/{{ result_path }}" class="btn btn-success">Download Results (JSON)</a>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card result-section">
+                    <div class="card-header">
+                        <h2>Original Text</h2>
+                    </div>
+                    <div class="card-body">
+                        <pre>{{ result.original_text }}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card result-section">
+                    <div class="card-header">
+                        <h2>Tokens</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="token-list">
+                            <ul class="list-group">
+                                {% for token in result.tokens %}
+                                <li class="list-group-item">{{ token }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card result-section">
+                    <div class="card-header">
+                        <h2>Sentences</h2>
+                    </div>
+                    <div class="card-body">
+                        <ol>
+                            {% for sentence in result.sentences %}
+                            <li>{{ sentence }}</li>
+                            {% endfor %}
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if 'sentiment' in result %}
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card result-section">
+                    <div class="card-header">
+                        <h2>Sentiment Analysis</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h4>Overall Sentiment: 
+                                    {% if result.sentiment.polarity > 0.05 %}
+                                    <span class="badge bg-success">Positive</span>
+                                    {% elif result.sentiment.polarity < -0.05 %}
+                                    <span class="badge bg-danger">Negative</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Neutral</span>
+                                    {% endif %}
+                                </h4>
+                                <p>Polarity: {{ result.sentiment.polarity }}</p>
+                                <p>Subjectivity: {{ result.sentiment.subjectivity }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                {% if 'sentiment_chart' in result %}
+                                <img src="/{{ result.sentiment_chart }}" alt="Sentiment Chart" class="img-fluid">
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if 'entities' in result %}
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card result-section">
+                    <div class="card-header">
+                        <h2>Named Entities</h2>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Entity</th>
+                                    <th>Type</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entity in result.entities %}
+                                <tr>
+                                    <td>{{ entity.text }}</td>
+                                    <td>{{ entity.type }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if 'keywords' in result %}
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card result-section">
+                    <div class="card-header">
+                        <h2>Keywords</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Keyword</th>
+                                            <th>Score</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for keyword in result.keywords %}
+                                        <tr>
+                                            <td>{{ keyword.text }}</td>
+                                            <td>{{ keyword.score }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                {% if 'wordcloud' in result %}
+                                <img src="/{{ result.wordcloud }}" alt="Word Cloud" class="img-fluid">
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if 'topics' in result %}
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card result-section">
+                    <div class="card-header">
+                        <h2>Topics</h2>
+                    </div>
+                    <div class="card-body">
+                        <div class="accordion" id="topicsAccordion">
+                            {% for topic in result.topics %}
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="heading{{ loop.index }}">
+                                    <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}" aria-expanded="{% if loop.first %}true{% else %}false{% endif %}" aria-controls="collapse{{ loop.index }}">
+                                        Topic {{ loop.index }}
+                                    </button>
+                                </h2>
+                                <div id="collapse{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" aria-labelledby="heading{{ loop.index }}" data-bs-parent="#topicsAccordion">
+                                    <div class="accordion-body">
+                                        <ul>
+                                            {% for word in topic.words %}
+                                            <li>{{ word }} ({{ topic.weights[loop.index0] }})</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if 'summary' in result %}
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card result-section">
+                    <div class="card-header">
+                        <h2>Summary</h2>
+                    </div>
+                    <div class="card-body">
+                        <p>{{ result.summary }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="footer">
+            <p>&copy; 2025 JustYuh. Licensed under the <a href="https://github.com/JustYuh/text-minning-tool/blob/main/LICENSE">MIT License</a>.</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html> 

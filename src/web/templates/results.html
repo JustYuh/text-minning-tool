@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="result-section">
+        <h2>Original Text</h2>
+        <div class="result-item">
+            <p>{{ result.original_text }}</p>
+        </div>
+    </div>
+
+    <div class="result-section">
+        <div class="toggle-section">
+            <h2>Preprocessing Results</h2>
+            <button class="toggle-button" data-target="preprocessing-results">Hide</button>
+        </div>
+        
+        <div id="preprocessing-results" class="collapsible">
+            <div class="result-item">
+                <div class="result-title">Tokens ({{ result.tokens|length }})</div>
+                <div class="token-list">
+                    {% for token in result.tokens %}
+                    <span class="token">{{ token }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div class="result-item">
+                <div class="result-title">Sentences ({{ result.sentences|length }})</div>
+                <div class="sentence-list">
+                    {% for sentence in result.sentences %}
+                    <div class="sentence">{{ sentence }}</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% if result.sentiment %}
+    <div class="result-section">
+        <div class="toggle-section">
+            <h2>Sentiment Analysis</h2>
+            <button class="toggle-button" data-target="sentiment-results">Hide</button>
+        </div>
+        
+        <div id="sentiment-results" class="collapsible">
+            <div class="result-item">
+                <div class="sentiment sentiment-{{ result.sentiment.label }}">
+                    <div class="result-title">{{ result.sentiment.label|title }} Sentiment (Score: {{ "%.2f"|format(result.sentiment.score) }})</div>
+                    <p>The text expresses a {{ result.sentiment.label }} sentiment.</p>
+                    {% if result.sentiment_chart %}
+                    <div class="visualization">
+                        <h3>Sentiment Analysis Chart</h3>
+                        <img src="/{{ result.sentiment_chart }}" alt="Sentiment Analysis Chart">
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if result.entities %}
+    <div class="result-section">
+        <div class="toggle-section">
+            <h2>Named Entities</h2>
+            <button class="toggle-button" data-target="entity-results">Hide</button>
+        </div>
+        
+        <div id="entity-results" class="collapsible">
+            <div class="result-item">
+                {% for entity in result.entities %}
+                <span class="entity entity-{{ entity.type|lower }}">{{ entity.text }} ({{ entity.type }})</span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if result.keywords %}
+    <div class="result-section">
+        <div class="toggle-section">
+            <h2>Keywords</h2>
+            <button class="toggle-button" data-target="keyword-results">Hide</button>
+        </div>
+        
+        <div id="keyword-results" class="collapsible">
+            <div class="result-item">
+                {% for keyword in result.keywords %}
+                <span class="keyword">{{ keyword.text }} ({{ "%.2f"|format(keyword.score) }})</span>
+                {% endfor %}
+                {% if result.wordcloud %}
+                <div class="visualization">
+                    <h3>Word Cloud</h3>
+                    <img src="/{{ result.wordcloud }}" alt="Word Cloud">
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if result.entity_chart %}
+    <div class="visualization">
+        <h3>Named Entities Chart</h3>
+        <img src="/{{ result.entity_chart }}" alt="Named Entities Chart">
+    </div>
+    {% endif %}
+
+    {% if result.keyword_chart %}
+    <div class="visualization">
+        <h3>Keyword Distribution</h3>
+        <img src="/{{ result.keyword_chart }}" alt="Keyword Distribution Chart">
+    </div>
+    {% endif %}
+    
+    <div class="download-buttons">
+        <button class="button" onclick="downloadResults('json')">Download JSON</button>
+        <button class="button" onclick="downloadResults('csv')">Download CSV</button>
+        <button class="button" onclick="downloadResults('txt')">Download Text</button>
+        <a href="/" class="button button-secondary">Process Another Text</a>
+    </div>
+</div>
+
+<!-- Hidden element to store result data -->
+<div id="result-data" style="display: none;">{{ result|tojson }}</div>
+
+<script>
+function downloadResults(format) {
+    const resultData = JSON.parse(document.getElementById('result-data').textContent);
+    let content = '';
+    let filename = 'text_mining_results';
+    let mimeType = '';
+    
+    if (format === 'json') {
+        content = JSON.stringify(resultData, null, 2);
+        filename += '.json';
+        mimeType = 'application/json';
+    } else if (format === 'csv') {
+        // Create CSV content
+        const headers = ['Type', 'Text', 'Score/Value'];
+        content = headers.join(',') + '\n';
+        
+        // Add tokens
+        resultData.tokens.forEach(token => {
+            content += `Token,${token},-\n`;
+        });
+        
+        // Add sentences
+        resultData.sentences.forEach(sentence => {
+            content += `Sentence,${sentence.replace(/,/g, ';')},-\n`;
+        });
+        
+        // Add sentiment if available
+        if (resultData.sentiment) {
+            content += `Sentiment,${resultData.sentiment.label},${resultData.sentiment.score}\n`;
+        }
+        
+        // Add entities if available
+        if (resultData.entities) {
+            resultData.entities.forEach(entity => {
+                content += `Entity,${entity.text},${entity.type}\n`;
+            });
+        }
+        
+        // Add keywords if available
+        if (resultData.keywords) {
+            resultData.keywords.forEach(keyword => {
+                content += `Keyword,${keyword.text},${keyword.score}\n`;
+            });
+        }
+        
+        filename += '.csv';
+        mimeType = 'text/csv';
+    } else {
+        // Create plain text content
+        content = `Text Mining Results\n\n`;
+        content += `Original Text:\n${resultData.original_text}\n\n`;
+        
+        content += `Tokens (${resultData.tokens.length}):\n`;
+        content += resultData.tokens.join(', ') + '\n\n';
+        
+        content += `Sentences (${resultData.sentences.length}):\n`;
+        content += resultData.sentences.join('\n') + '\n\n';
+        
+        if (resultData.sentiment) {
+            content += `Sentiment Analysis:\n`;
+            content += `Label: ${resultData.sentiment.label}\n`;
+            content += `Score: ${resultData.sentiment.score}\n\n`;
+        }
+        
+        if (resultData.entities) {
+            content += `Named Entities:\n`;
+            resultData.entities.forEach(entity => {
+                content += `- ${entity.text} (${entity.type})\n`;
+            });
+            content += '\n';
+        }
+        
+        if (resultData.keywords) {
+            content += `Keywords:\n`;
+            resultData.keywords.forEach(keyword => {
+                content += `- ${keyword.text} (${keyword.score})\n`;
+            });
+        }
+        
+        filename += '.txt';
+        mimeType = 'text/plain';
+    }
+    
+    // Create and trigger download
+    const blob = new Blob([content], { type: mimeType });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+}
+
+// Toggle sections
+document.querySelectorAll('.toggle-button').forEach(button => {
+    button.addEventListener('click', function() {
+        const targetId = this.getAttribute('data-target');
+        const targetElement = document.getElementById(targetId);
+        
+        if (targetElement) {
+            if (targetElement.style.display === 'none') {
+                targetElement.style.display = 'block';
+                this.textContent = 'Hide';
+            } else {
+                targetElement.style.display = 'none';
+                this.textContent = 'Show';
+            }
+        }
+    });
+});
+</script>
+{% endblock %} 
